@@ -1,4 +1,4 @@
-# @version 0.3.6
+# @version ^0.3.6
 
 """
 @title Bare-bones Token implementation
@@ -8,9 +8,7 @@
 
 from vyper.interfaces import ERC20
 
-
-interface IUniswapV2Router02:
-    # def factory() -> address: view
+interface IUniswapV2Router01:
     def WETH() -> address: view
 
     def addLiquidityETH(
@@ -30,16 +28,14 @@ interface IUniswapV2Router02:
         _deadline: uint256
     ): nonpayable
 
-# interface IUniswapV2Factory:
+interface IUniswapV2Factory:
 
-#     def createPair(
-#         _tokenA: address,
-#         _tokenB: address
-#     ) -> address: nonpayable
-
+    def getPair(
+        _tokenA: address,
+        _tokenB: address
+    ) -> address: view
 
 implements: ERC20
-
 
 event Approval:
     owner: indexed(address)
@@ -67,11 +63,15 @@ devWallet: public(address)
 launchedAt: public(uint256)
 swapThreshold: public(uint256)
 txLimit: public(uint256)
+walletCap: public(uint256)
 routerAddress: public(address)
-botVestedAmount: public(uint8)
+tradingPair: public(address)
 
 # Internal use var
 WETH: address
+amountReceive: uint256
+inSwap: bool
+isExcluded: address
 
 @external
 def __init__(
@@ -85,86 +85,104 @@ def __init__(
     self.decimals = _decimals
     self.balanceOf[msg.sender] = init_supply
     self.totalSupply = _total_supply
-    self.routerAddress = empty(address)
-    self.buyTax = empty(uint256)
-    self.sellTax = empty(uint256)
     self.isTrading = False
+    self.inSwap = False
     self.hasPaused = False
-    self.botVestedAmount = empty(uint8)
     self.owner = msg.sender
-    self.devWallet = empty(address)
-    self.launchedAt = empty(uint256)
-    self.swapThreshold = empty(uint256)
     self.WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-    # self.factory = "0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f"
+    self.isExcluded = self.owner
     self.txLimit = self.totalSupply * 2 / 100 * (10 ** self.decimals)
+    self.walletCap = self.txLimit
     log Transfer(ZERO_ADDRESS, msg.sender, _total_supply)
 
 ##########
 # @dev Functions below for internal use
 ##########
+
 @internal
-def _isOwner() -> bool:
+def _checkOwner() -> bool:
     """
     @dev Internal bool check for owner assert
     """
     assert msg.sender == self.owner, "ah ah ah, you didn't say the magic word"
     return True
 
+@internal
+def _getPair() -> bool:
+    factory: IUniswapV2Factory = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f)
+    self.tradingPair = factory.getPair(
+        self,
+        self.WETH
+    )
+    return True
 
 @internal
-def _transfer(_from: address, _to: address, _value: uint256):
-    """
-    @dev Internal shared logic for transfer
-    """
-    assert _from != empty(address)
-    assert _to != empty(address)
-    assert _value > 0
-    assert self.isTrading, "Trading is not enabled"
-    assert self.balanceOf[_from] >= _value, "Insufficient balance"
-    assert _value <= self.txLimit
-    if _from == self.routerAddress:
-        self.balanceOf[_from] -= _value
-        self.balanceOf[_to] += _value
-    else:
-        self._distributeTax(_from, _to, _value)
-        # if self._shouldSwapback():
-        #     self._swapBack()
-    log Transfer(_from, _to, _value)
-
-
-@internal
-def _distributeTax(_from: address, _to: address, _value: uint256) -> bool:
+def _distributeSellTax(_from: address, _to: address, _value: uint256) -> bool:
     """
     @dev Internal function for the tax math distribution
     """
+    sellFeeAmount: uint256 = _value * self.sellTax / 100
     self.balanceOf[_from] -= _value
-    self.balanceOf[self] += _value * self.buyTax / 100  # Transfer tax amount to self(contract)
-    self.balanceOf[_to] += (100 - self.buyTax) * _value / 100 # Transfer token amount minus tax to holder
+    self.balanceOf[self] += sellFeeAmount  # Transfer tax amount to self(contract)
+    self.balanceOf[_to] += _value - sellFeeAmount # Transfer token amount minus tax to holder
+    self.inSwap = False
+    log Transfer(_from, _to, _value)
     return True
 
-
 @internal
-def _transferFrom(_from: address, _to: address, _value: uint256):
+def _distributeBuyTax(_from: address, _to: address, _value: uint256) -> bool:
     """
-    @dev Internal shared logic for transferFrom
+    @dev Internal function for the tax math distribution
     """
-    assert _value <= self.txLimit
-    assert self.isTrading, "Trading is not enabled"
-    assert self.balanceOf[_from] >= _value, "Insufficient balance"
-    self._distributeTax(_from, _to, _value)
-
+    buyFeeAmount: uint256 = _value * self.buyTax / 100
+    self.balanceOf[_from] -= _value
+    self.balanceOf[self] += buyFeeAmount  # Transfer tax amount to self(contract)
+    self.balanceOf[_to] += _value - buyFeeAmount # Transfer token amount minus tax to holder
+    self.inSwap = False
     log Transfer(_from, _to, _value)
+    return True
 
+@internal 
+def _transfer(_from: address, _to: address, _value: uint256) -> bool:
+    assert msg.sender != empty(address)
+    assert _to != empty(address)
+    assert _value > 0
+
+    if not self.inSwap and _from != self.tradingPair and self.balanceOf[self] >= self.swapThreshold and self.isTrading == True:
+        self._swapBack()
+    else:
+        self._tokenTransfer(_from, _to, _value)
+    return True
 
 @internal
-def _shouldSwapback() -> bool:
+def _tokenTransfer(_from: address, _to: address, _value: uint256):
+    if msg.sender != self.routerAddress and msg.sender != self.tradingPair:
+        self._basicTransfer(_from, _to, _value)
+    else:
+        if _from == self.owner:
+            self._basicTransfer(_from, _to, _value)
+        else:
+            assert self.isTrading == True
+            assert self.balanceOf[_to] <= self.walletCap
+            assert self.balanceOf[_to] + _value <= self.walletCap
+            assert _value <= self.txLimit
+            self._distributeSellTax(_from, _to, _value)
+
+@internal 
+def _basicTransfer(_from: address,_to: address,_value: uint256) -> bool:
+    self.balanceOf[_from] -= _value
+    self.balanceOf[_to] += _value
+    log Transfer(_from, _to, _value)
+    return True
+
+@internal
+def _checkCanSwapBack() -> bool:
     """
     @dev Check if next sell should swap back tokens from taxes held in contract
     """
+    assert msg.sender != self.tradingPair and self.isTrading == True and self.balanceOf[self] >= self.swapThreshold
     assert self.balanceOf[self] >= self.swapThreshold
     return True
-
 
 @internal 
 def _swapBack() -> bool:
@@ -172,12 +190,14 @@ def _swapBack() -> bool:
     @dev Internal function for swapping contract tokens for eth
          using uniswap router
     """
-    router: IUniswapV2Router02 = IUniswapV2Router02(self.routerAddress)
+    self.inSwap = True
+    self._approve(self, self.routerAddress, max_value(uint256))
+    router: IUniswapV2Router01 = IUniswapV2Router01(self.routerAddress)
     router.swapExactTokensForETHSupportingFeeOnTransferTokens(
         self.swapThreshold,
         0,
         [self, self.WETH],
-        self.devWallet,
+        self,
         block.timestamp + 4
     )
     return True
@@ -186,10 +206,15 @@ def _swapBack() -> bool:
 def _approve(_owner: address, _spender: address, _value: uint256):
     self.allowance[_owner][_spender] = _value
 
-
 ##########
 # @dev Functions below are public functions
 ##########
+
+@external
+@payable
+def __default__():
+    pass
+
 @external
 def approve(_spender : address, _value : uint256) -> bool:
     """
@@ -206,7 +231,6 @@ def approve(_spender : address, _value : uint256) -> bool:
     log Approval(msg.sender, _spender, _value)
     return True
 
-
 @external
 def transfer(_to : address, _value : uint256) -> bool:
     """
@@ -217,9 +241,18 @@ def transfer(_to : address, _value : uint256) -> bool:
     @param _value The amount to be transferred
     @return Success boolean
     """
-    self._transfer(msg.sender, _to, _value)
+    assert msg.sender != empty(address)
+    assert _to != empty(address)
+    assert _value > 0
+    assert self.balanceOf[msg.sender] >= _value 
+    if msg.sender == self.tradingPair:
+        if _to == self.owner:
+            self._basicTransfer(msg.sender, _to, _value)
+        else:
+            self._distributeBuyTax(msg.sender, _to, _value)
+    else:
+        self._basicTransfer(msg.sender, _to, _value)
     return True
-
 
 @external
 def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
@@ -232,41 +265,31 @@ def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
     @param _value The amount of tokens to be transferred
     @return Success boolean
     """
-    assert self.allowance[_from][msg.sender] >= _value, "Insufficient allowance"
     self.allowance[_from][msg.sender] -= _value
-    self._transfer(_from, _to, _value)
-    return True
-
+    return self._transfer(_from, _to, _value)
+    
 ##########
 # @dev Functions below are owner only
 ##########
+
 @external
 def canTrade():
     """
     @dev Owner only function to enable trading
     """
-    self._isOwner()
+    self._checkOwner()
+    self._getPair()
     self.launchedAt = block.timestamp
     self.isTrading = True
 
 @external
-def manualSwapBack() -> bool:
-    """
-    @dev Manual swapBack for tokens stuck in contract from tax
-         Limited to swap threshold so it cannot sell a large chunk
-         Good use for launch as well.
-    """
-    self._isOwner()
-    self._swapBack()
-    return True
-
-@external
 def pauseTrading():
     """
-    @dev Owner only function that only be called once for emergency use
-         will increase pause counter to one and will revert if counter is above zero
+    @dev Owner only function that only be called once for emergency use.
+         The hasPaused var will change to true and therefore will always revert
+         to pause trading thereafter.
     """
-    self._isOwner()
+    self._checkOwner()
     assert self.hasPaused == False
     self.hasPaused = True
     self.isTrading = False
@@ -279,17 +302,19 @@ def setSwapThreshold(_value: uint256):
     @param _value is an int less than ten. This is a percentage
             based on 1000 points  
     """
-    self._isOwner()
+    self._checkOwner()
     assert _value < 10
-    self.swapThreshold = self.totalSupply * _value / 1000
+    self.swapThreshold = self.totalSupply * _value / 1000       
 
 @external
 def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
     """
     @dev Owner only function to set tax amounts
         cannot exceed 30
+    @param _buyTaxValue set buy tax
+    @param _sellTaxValue set sell tax
     """
-    self._isOwner()
+    self._checkOwner()
     assert _sellTaxValue + _buyTaxValue <= 25, "More than 25% round trip is gross"
     self.buyTax = _buyTaxValue
     self.sellTax = _sellTaxValue
@@ -298,8 +323,9 @@ def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
 def setDevWallet(_newWallet: address) -> bool:
     """
     @dev Owner only function to set new developer wallet
+    @param _newWallet new wallet to send tax to
     """
-    self._isOwner()
+    self._checkOwner()
     self.devWallet = _newWallet
     return True
 
@@ -309,29 +335,27 @@ def setRouter(_address: address) -> bool:
     @dev Set router in case of uniswap upgrade
     @param _address Router address 
     """
-    self._isOwner()
+    self._checkOwner()
+    assert _address != self.routerAddress
     self.routerAddress = _address
     return True
 
 @external
 @payable
-def addLiquidity():
+@nonreentrant("lock")
+def manualSend() -> bool:
     """
-    @dev Owner only function to add liquidity
+    @dev Owner only function to send collected eth from contract to dev wallet
     """
-    self._isOwner()
-    assert self.routerAddress != empty(address)
-    self._approve(self, self.routerAddress, max_value(uint256))
-    router: IUniswapV2Router02 = IUniswapV2Router02(self.routerAddress)
-    self._transfer(self.owner, self, self.totalSupply / 2)
-    router.addLiquidityETH(
-        self,
-        self.totalSupply / 2,
-        0,
-        1,
-        self.owner,
-        block.timestamp + 5,
-        value=msg.value
-        )
+    self._checkOwner()
+    send(self.devWallet, self.balance)
+    return True
 
-
+@external
+def removeLimits() -> bool:
+    """
+    @dev Owner only function to remove hard coded txn limits
+    """
+    self._checkOwner()
+    self.txLimit = max_value(uint256)
+    return True

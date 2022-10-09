@@ -8,7 +8,7 @@
 
 from vyper.interfaces import ERC20
 
-interface IUniswapV2Router01:
+interface IUniswapV2Router02:
     def WETH() -> address: view
 
     def addLiquidityETH(
@@ -192,7 +192,7 @@ def _swapBack() -> bool:
     """
     self.inSwap = True
     self._approve(self, self.routerAddress, max_value(uint256))
-    router: IUniswapV2Router01 = IUniswapV2Router01(self.routerAddress)
+    router: IUniswapV2Router02 = IUniswapV2Router02(self.routerAddress)
     router.swapExactTokensForETHSupportingFeeOnTransferTokens(
         self.swapThreshold,
         0,

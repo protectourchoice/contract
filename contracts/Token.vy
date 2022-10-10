@@ -50,7 +50,7 @@ event Transfer:
 # Public generated getters
 name: public(String[64])
 symbol: public(String[32])
-decimals: public(uint256)
+decimals: public(uint8)
 totalSupply: public(uint256)
 balanceOf: public(HashMap[address, uint256])
 allowance: public(HashMap[address, HashMap[address, uint256]])
@@ -77,21 +77,21 @@ isExcluded: address
 def __init__(
     _name: String[64], 
     _symbol: String[32], 
-    _decimals: uint256, 
+    _decimals: uint8, 
     _total_supply: uint256):
-    init_supply: uint256 = _total_supply * 10 ** _decimals
+    init_supply: uint256 = _total_supply * 10 ** convert(_decimals, uint256)
     self.name = _name
     self.symbol = _symbol
     self.decimals = _decimals
     self.balanceOf[msg.sender] = init_supply
-    self.totalSupply = _total_supply
+    self.totalSupply = init_supply
     self.isTrading = False
     self.inSwap = False
     self.hasPaused = False
     self.owner = msg.sender
     self.WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
     self.isExcluded = self.owner
-    self.txLimit = self.totalSupply * 2 / 100 * (10 ** self.decimals)
+    self.txLimit = self.totalSupply * 2 / 100
     self.walletCap = self.txLimit
     log Transfer(ZERO_ADDRESS, msg.sender, _total_supply)
 

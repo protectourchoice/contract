@@ -184,7 +184,6 @@ def _tokenTransfer(_from: address, _to: address, _value: uint256):
             self._basicTransfer(_from, _to, _value)
         else:
             assert self.isTrading == True
-            assert self.balanceOf[_to] <= self.walletCap
             assert self.balanceOf[_to] + _value <= self.walletCap
             assert _value <= self.txLimit
             self._distributeSellTax(_from, _to, _value)

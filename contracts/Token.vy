@@ -94,6 +94,7 @@ TRADING_PAIR: immutable(address)
 amountReceive: uint256
 inSwap: bool
 isExcluded: address
+pauseCounter: uint8
 
 @external
 def __init__(
@@ -288,14 +289,21 @@ def canTrade():
 def pauseTrading():
     """
     @dev Owner only function that only be called once for emergency use.
-         The hasPaused var will change to true and therefore will always revert
-         to pause trading thereafter.
+         self.isTrading will change to false. Public getter hasPaused
+         will show true in order to show the contract has been paused.
+         Setting the pauseCounter to 1 will allow the contract to only 
+         be paused once and will be able to resume, but thereafter will revert
     """
     self._checkOwner()
-    assert self.hasPaused == False
-    self.hasPaused = True
-    self.isTrading = False
-    log PausedTrading(self.hasPaused)
+    if self.hasPaused == False:
+        self.pauseCounter += 1
+        self.isTrading = False
+        log PausedTrading(self.isTrading)
+    elif self.hasPaused == True and self.pauseCounter == 1:
+        self.isTrading = True
+        log PausedTrading(self.isTrading)
+    else:
+        raise "Can only pause once"
 
 @external
 def setSwapThreshold(_value: uint256):

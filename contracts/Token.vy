@@ -351,6 +351,8 @@ def setDevWallet(_newWallet: address) -> bool:
     @param _newWallet new wallet to send tax to
     """
     self._checkOwner()
+    assert _newWallet != empty(address)
+    assert _newWallet != self.devWallet
     self.devWallet = _newWallet
     return True
 
@@ -361,6 +363,7 @@ def setRouter(_address: address) -> bool:
     @param _address Router address 
     """
     self._checkOwner()
+    assert _address != empty(address)
     assert _address != self.routerAddress
     self.routerAddress = _address
     log SetRouter(_address)

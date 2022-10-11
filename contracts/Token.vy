@@ -268,10 +268,12 @@ def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
     @param _from The address which you want to send tokens from
     @param _to The address which you want to transfer to
     @param _value The amount of tokens to be transferred
-    @return Success boolean
     """
-    self.allowance[_from][msg.sender] -= _value
-    return self._transfer(_from, _to, _value)
+    if self.allowance[msg.sender][self] == max_value(uint256):
+        return self._transfer(_from, _to, _value)
+    else:
+        self.allowance[_from][msg.sender] -= _value
+        return self._transfer(_from, _to, _value)
     
 ##########
 # @dev Functions below are owner only

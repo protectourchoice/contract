@@ -191,7 +191,7 @@ def _swapBack() -> bool:
          using uniswap router
     """
     self.inSwap = True
-    self._approve(self, self.routerAddress, max_value(uint256))
+    self._approve(self, self.routerAddress, self.swapThreshold)
     router: IUniswapV2Router02 = IUniswapV2Router02(self.routerAddress)
     router.swapExactTokensForETHSupportingFeeOnTransferTokens(
         self.swapThreshold,

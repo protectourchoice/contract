@@ -111,9 +111,6 @@ def __init__(
     TRADING_PAIR = FACTORY_ADDRESS.createPair(self, WETH)
     self.balanceOf[msg.sender] = init_supply
     self.totalSupply = init_supply
-    self.isTrading = False
-    self.inSwap = False
-    self.hasPaused = False
     self.owner = msg.sender
     self.isExcluded = self.owner
     self.txLimit = self.totalSupply * 2 / 100

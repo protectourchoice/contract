@@ -126,7 +126,7 @@ def __init__(
 @internal
 def _checkOwner():
     """
-    @dev Internal bool check for owner assert
+    @dev onlyOwner check
     """
     assert msg.sender == self.owner
 

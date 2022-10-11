@@ -114,7 +114,7 @@ def __init__(
     self.isExcluded = self.owner
     self.txLimit = self.totalSupply * 2 / 100
     self.walletCap = self.txLimit
-    log Transfer(empty(address), msg.sender, _total_supply)
+    log Transfer(empty(address), msg.sender, init_supply)
 
 ##########
 # @dev Functions below for internal use

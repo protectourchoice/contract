@@ -334,12 +334,12 @@ def setSwapThreshold(_value: uint256):
 def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
     """
     @dev Owner only function to set tax amounts
-        cannot exceed 30
+        cannot exceed 25
     @param _buyTaxValue set buy tax
     @param _sellTaxValue set sell tax
     """
     self._checkOwner()
-    assert _sellTaxValue + _buyTaxValue <= 25, "More than 25% round trip is gross"
+    assert _sellTaxValue + _buyTaxValue <= 25
     self.buyTax = _buyTaxValue
     self.sellTax = _sellTaxValue
     log SetTaxes(self.buyTax, self.sellTax)

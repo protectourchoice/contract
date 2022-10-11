@@ -195,15 +195,6 @@ def _basicTransfer(_from: address,_to: address,_value: uint256) -> bool:
     log Transfer(_from, _to, _value)
     return True
 
-@internal
-def _checkCanSwapBack() -> bool:
-    """
-    @dev Check if next sell should swap back tokens from taxes held in contract
-    """
-    assert msg.sender != self.tradingPair and self.isTrading == True and self.balanceOf[self] >= self.swapThreshold
-    assert self.balanceOf[self] >= self.swapThreshold
-    return True
-
 @internal 
 def _swapBack() -> bool:
     """

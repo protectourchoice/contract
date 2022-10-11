@@ -47,6 +47,27 @@ event Transfer:
     receiver: indexed(address)
     value: uint256
 
+event SetRouter:
+    newRouter: indexed(address)
+
+event SetSwapThreshold:
+    value: uint256
+
+event RemoveLimits:
+    maxTx: uint256
+    maxWallet: uint256
+
+event SetTaxes:
+    buyTax: uint256
+    sellTax: uint256
+
+event PausedTrading:
+    hasPaused: bool
+
+event StartTrading:
+    startBlock: uint256
+    canTrade: bool
+
 # Public generated getters
 name: public(String[64])
 symbol: public(String[32])
@@ -281,6 +302,7 @@ def canTrade():
     self._getPair()
     self.launchedAt = block.timestamp
     self.isTrading = True
+    log StartTrading(self.launchedAt, self.isTrading)
 
 @external
 def pauseTrading():
@@ -293,6 +315,7 @@ def pauseTrading():
     assert self.hasPaused == False
     self.hasPaused = True
     self.isTrading = False
+    log PausedTrading(self.hasPaused)
 
 @external
 def setSwapThreshold(_value: uint256):
@@ -304,7 +327,8 @@ def setSwapThreshold(_value: uint256):
     """
     self._checkOwner()
     assert _value < 10
-    self.swapThreshold = self.totalSupply * _value / 1000       
+    self.swapThreshold = self.totalSupply * _value / 1000  
+    log SetSwapThreshold(self.swapThreshold)     
 
 @external
 def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
@@ -318,6 +342,7 @@ def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
     assert _sellTaxValue + _buyTaxValue <= 25, "More than 25% round trip is gross"
     self.buyTax = _buyTaxValue
     self.sellTax = _sellTaxValue
+    log SetTaxes(self.buyTax, self.sellTax)
     
 @external
 def setDevWallet(_newWallet: address) -> bool:
@@ -338,6 +363,7 @@ def setRouter(_address: address) -> bool:
     self._checkOwner()
     assert _address != self.routerAddress
     self.routerAddress = _address
+    log SetRouter(_address)
     return True
 
 @external
@@ -358,4 +384,6 @@ def removeLimits() -> bool:
     """
     self._checkOwner()
     self.txLimit = max_value(uint256)
+    self.walletCap = max_value(uint256)
+    log RemoveLimits( self.txLimit, self.walletCap)
     return True

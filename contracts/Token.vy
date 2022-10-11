@@ -205,6 +205,7 @@ def _swapBack():
 @internal
 def _approve(_owner: address, _spender: address, _value: uint256):
     self.allowance[_owner][_spender] = _value
+    log Approval(_owner, _spender, _value)
 
 ##########
 # @dev Functions below are public functions
@@ -227,8 +228,7 @@ def approve(_spender : address, _value : uint256) -> bool:
     @param _value The amount of tokens to be spent.
     @return Success boolean
     """
-    self.allowance[msg.sender][_spender] = _value
-    log Approval(msg.sender, _spender, _value)
+    self._approve(msg.sender, _spender, _value)
     return True
 
 @external
@@ -376,7 +376,7 @@ def removeLimits() -> bool:
 def addLiquidity(_amountPerc: uint8):
     """
     @dev Owner only function to add liquidity
-    @param _amountPerc integer value for percentage to add to liquidity
+    @param _amountPerc integer value for percentage to add liq
     """
     self._checkOwner()
     assert self.routerAddress != empty(address)

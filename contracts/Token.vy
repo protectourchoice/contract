@@ -69,9 +69,9 @@ event StartTrading:
     canTrade: bool
 
 # Public generated getters
-name: public(String[64])
-symbol: public(String[32])
-decimals: public(uint8)
+NAME: public(immutable(String[64]))
+SYMBOL: public(immutable(String[32]))
+DECIMALS: public(immutable(uint8))
 totalSupply: public(uint256)
 balanceOf: public(HashMap[address, uint256])
 allowance: public(HashMap[address, HashMap[address, uint256]])
@@ -89,7 +89,8 @@ routerAddress: public(address)
 tradingPair: public(address)
 
 # Internal use var
-WETH: address
+WETH: immutable(address)
+FACTORY_ADDRESS: immutable(IUniswapV2Factory)
 amountReceive: uint256
 inSwap: bool
 isExcluded: address
@@ -101,16 +102,17 @@ def __init__(
     _decimals: uint8, 
     _total_supply: uint256):
     init_supply: uint256 = _total_supply * 10 ** convert(_decimals, uint256)
-    self.name = _name
-    self.symbol = _symbol
-    self.decimals = _decimals
+    NAME = _name
+    SYMBOL = _symbol
+    DECIMALS = _decimals
+    WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+    FACTORY_ADDRESS = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f)
     self.balanceOf[msg.sender] = init_supply
     self.totalSupply = init_supply
     self.isTrading = False
     self.inSwap = False
     self.hasPaused = False
     self.owner = msg.sender
-    self.WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
     self.isExcluded = self.owner
     self.txLimit = self.totalSupply * 2 / 100
     self.walletCap = self.txLimit
@@ -132,7 +134,7 @@ def _getPair():
     factory: IUniswapV2Factory = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f)
     self.tradingPair = factory.getPair(
         self,
-        self.WETH
+        WETH
     )
 
 @internal
@@ -202,7 +204,7 @@ def _swapBack():
     router.swapExactTokensForETHSupportingFeeOnTransferTokens(
         self.swapThreshold,
         0,
-        [self, self.WETH],
+        [self, WETH],
         self,
         block.timestamp + 4
     )

@@ -121,24 +121,22 @@ def __init__(
 ##########
 
 @internal
-def _checkOwner() -> bool:
+def _checkOwner():
     """
     @dev Internal bool check for owner assert
     """
-    assert msg.sender == self.owner, "ah ah ah, you didn't say the magic word"
-    return True
+    assert msg.sender == self.owner
 
 @internal
-def _getPair() -> bool:
+def _getPair():
     factory: IUniswapV2Factory = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f)
     self.tradingPair = factory.getPair(
         self,
         self.WETH
     )
-    return True
 
 @internal
-def _distributeSellTax(_from: address, _to: address, _value: uint256) -> bool:
+def _distributeSellTax(_from: address, _to: address, _value: uint256):
     """
     @dev Internal function for the tax math distribution
     """
@@ -148,10 +146,9 @@ def _distributeSellTax(_from: address, _to: address, _value: uint256) -> bool:
     self.balanceOf[_to] += _value - sellFeeAmount # Transfer token amount minus tax to holder
     self.inSwap = False
     log Transfer(_from, _to, _value)
-    return True
 
 @internal
-def _distributeBuyTax(_from: address, _to: address, _value: uint256) -> bool:
+def _distributeBuyTax(_from: address, _to: address, _value: uint256):
     """
     @dev Internal function for the tax math distribution
     """
@@ -161,7 +158,6 @@ def _distributeBuyTax(_from: address, _to: address, _value: uint256) -> bool:
     self.balanceOf[_to] += _value - buyFeeAmount # Transfer token amount minus tax to holder
     self.inSwap = False
     log Transfer(_from, _to, _value)
-    return True
 
 @internal 
 def _transfer(_from: address, _to: address, _value: uint256) -> bool:
@@ -189,14 +185,13 @@ def _tokenTransfer(_from: address, _to: address, _value: uint256):
             self._distributeSellTax(_from, _to, _value)
 
 @internal 
-def _basicTransfer(_from: address,_to: address,_value: uint256) -> bool:
+def _basicTransfer(_from: address,_to: address,_value: uint256):
     self.balanceOf[_from] -= _value
     self.balanceOf[_to] += _value
     log Transfer(_from, _to, _value)
-    return True
 
 @internal 
-def _swapBack() -> bool:
+def _swapBack():
     """
     @dev Internal function for swapping contract tokens for eth
          using uniswap router
@@ -211,7 +206,6 @@ def _swapBack() -> bool:
         self,
         block.timestamp + 4
     )
-    return True
 
 @internal
 def _approve(_owner: address, _spender: address, _value: uint256):

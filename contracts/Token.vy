@@ -93,7 +93,6 @@ FACTORY_ADDRESS: immutable(IUniswapV2Factory)
 TRADING_PAIR: immutable(address)
 amountReceive: uint256
 inSwap: bool
-isExcluded: address
 pauseCounter: uint8
 
 @external

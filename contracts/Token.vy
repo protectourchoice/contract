@@ -111,7 +111,6 @@ def __init__(
     self.balanceOf[msg.sender] = init_supply
     self.totalSupply = init_supply
     self.owner = msg.sender
-    self.isExcluded = self.owner
     self.txLimit = self.totalSupply * 2 / 100
     self.walletCap = self.txLimit
     log Transfer(empty(address), msg.sender, init_supply) # transfer correct init_supply
@@ -158,7 +157,7 @@ def _transfer(_from: address, _to: address, _value: uint256) -> bool:
     assert _from != empty(address)
     assert _to != empty(address)
     if _from == self.owner or _to == self.owner:
-        return self._basicTransfer(_from, _to, _value)
+        self._basicTransfer(_from, _to, _value)
     else:
         assert self.isTrading == True
         assert _value > 0 and _value <= self.txLimit
@@ -233,7 +232,7 @@ def transfer(_to : address, _value : uint256) -> bool:
     @param _value The amount to be transferred
     @return Success boolean
     """
-    return return self._transfer(msg.sender, _to, _value)
+    return self._transfer(msg.sender, _to, _value)
 
 @external
 def transferFrom(_from : address, _to : address, _value : uint256) -> bool:

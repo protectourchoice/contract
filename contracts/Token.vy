@@ -152,30 +152,23 @@ def _distributeBuyTax(_from: address, _to: address, _value: uint256):
     self.inSwap = False
     log Transfer(_from, _to, _value)
 
-@internal
+@internal 
 def _transfer(_from: address, _to: address, _value: uint256) -> bool:
-    assert msg.sender != empty(address)
+    assert _from != empty(address)
     assert _to != empty(address)
-    assert _value > 0
-
-    if not self.inSwap and _from != TRADING_PAIR and self.balanceOf[self] >= self.swapThreshold and self.isTrading == True:
-        self._swapBack()
+    if _from == self.owner or _to == self.owner:
+        return self._basicTransfer(_from, _to, _value)
     else:
-        self._tokenTransfer(_from, _to, _value)
-    return True
-
-@internal
-def _tokenTransfer(_from: address, _to: address, _value: uint256):
-    if msg.sender != self.routerAddress and msg.sender != TRADING_PAIR:
-        self._basicTransfer(_from, _to, _value)
-    else:
-        if _from == self.owner:
-            self._basicTransfer(_from, _to, _value)
-        else:
-            assert self.isTrading == True
-            assert self.balanceOf[_to] + _value <= self.walletCap
-            assert _value <= self.txLimit
+        assert self.isTrading == True
+        assert _value > 0 and _value <= self.txLimit
+        if _to == self.tradingPair:
+            if not self.inSwap and self.balanceOf[self] >= self.swapThreshold:
+                self._swapBack()
             self._distributeSellTax(_from, _to, _value)
+        else:
+            assert self.balanceOf[_to] + _value <= self.walletCap
+            self._distributeBuyTax(_from, _to, _value)
+    return True
 
 @internal
 def _basicTransfer(_from: address,_to: address,_value: uint256):
@@ -239,18 +232,7 @@ def transfer(_to : address, _value : uint256) -> bool:
     @param _value The amount to be transferred
     @return Success boolean
     """
-    assert msg.sender != empty(address)
-    assert _to != empty(address)
-    assert _value > 0
-    assert self.balanceOf[msg.sender] >= _value
-    if msg.sender == TRADING_PAIR:
-        if _to == self.owner:
-            self._basicTransfer(msg.sender, _to, _value)
-        else:
-            self._distributeBuyTax(msg.sender, _to, _value)
-    else:
-        self._basicTransfer(msg.sender, _to, _value)
-    return True
+    return return self._transfer(msg.sender, _to, _value)
 
 @external
 def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
@@ -262,11 +244,7 @@ def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
     @param _to The address which you want to transfer to
     @param _value The amount of tokens to be transferred
     """
-    if self.allowance[msg.sender][self] == max_value(uint256):
-        return self._transfer(_from, _to, _value)
-    else:
-        self.allowance[_from][msg.sender] -= _value
-        return self._transfer(_from, _to, _value)
+    return self._transfer(_from, _to, _value)
 
 ##########
 # @dev Functions below are owner only

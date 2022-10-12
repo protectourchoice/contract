@@ -91,9 +91,11 @@ tradingPair: public(address)
 WETH: immutable(address)
 FACTORY_ADDRESS: immutable(IUniswapV2Factory)
 TRADING_PAIR: immutable(address)
+MAX_TAX: immutable(uint256)
 amountReceive: uint256
 inSwap: bool
 pauseCounter: uint8
+
 
 @external
 def __init__(
@@ -108,6 +110,7 @@ def __init__(
     WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
     FACTORY_ADDRESS = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f)
     TRADING_PAIR = FACTORY_ADDRESS.createPair(self, WETH)
+    MAX_TAX = 25
     self.balanceOf[msg.sender] = init_supply
     self.totalSupply = init_supply
     self.owner = msg.sender
@@ -133,7 +136,7 @@ def _distributeSellTax(_from: address, _to: address, _value: uint256):
     """
     sellFeeAmount: uint256 = _value * self.sellTax / 100
     if self.allowance[_from][self] != max_value(uint256):
-        self.allowance[_from][self] -= _value
+        self._decreaseAllowance(_from, self, _value)
     self.balanceOf[_from] -= _value
     self.balanceOf[self] += sellFeeAmount  # Transfer tax amount to self(contract)
     self.balanceOf[_to] += _value - sellFeeAmount # Transfer token amount minus tax to holder
@@ -197,6 +200,15 @@ def _swapBack():
 def _approve(_owner: address, _spender: address, _value: uint256):
     self.allowance[_owner][_spender] = _value
     log Approval(_owner, _spender, _value)
+
+@internal 
+def _decreaseAllowance(_owner: address, _spender: address, _subtractedValue: uint256):
+    """
+    @dev Internal function to atomically decrease allowance if not max_value(uint356)
+    """
+    _currentAllowance: uint256 = self.allowance[_owner][_spender]
+    assert _currentAllowance >= _subtractedValue
+    self._approve(_owner, _spender, _currentAllowance - _subtractedValue)
 
 ##########
 # @dev Functions below are public functions
@@ -302,7 +314,7 @@ def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
     @param _sellTaxValue set sell tax
     """
     self._checkOwner()
-    assert _sellTaxValue + _buyTaxValue <= 25
+    assert _sellTaxValue + _buyTaxValue <= MAX_TAX
     self.buyTax = _buyTaxValue
     self.sellTax = _sellTaxValue
     log SetTaxes(self.buyTax, self.sellTax)

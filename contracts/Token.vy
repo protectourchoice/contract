@@ -221,7 +221,7 @@ def approve(_spender : address, _value : uint256) -> bool:
     @param _value The amount of tokens to be spent.
     @return Success boolean
     """
-    self._approve(msg.sender, _spender, _value)
+    self._approve(msg.sender, _spender, _value) # Use internal _approve
     return True
 
 @external

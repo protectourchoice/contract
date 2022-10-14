@@ -136,8 +136,6 @@ def _distributeSellTax(_from: address, _to: address, _value: uint256):
     @dev Internal function for the tax math distribution
     """
     sellFeeAmount: uint256 = _value * self.sellTax / 100
-    if self.allowance[_from][self] != max_value(uint256):
-        self._decreaseAllowance(_from, self, _value)
     self.balanceOf[_from] -= _value
     self.balanceOf[self] += sellFeeAmount  # Transfer tax amount to self(contract)
     self.balanceOf[_to] += _value - sellFeeAmount # Transfer token amount minus tax to holder
@@ -257,6 +255,8 @@ def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
     @param _to The address which you want to transfer to
     @param _value The amount of tokens to be transferred
     """
+    if self.allowance[_from][self] != max_value(uint256):
+        self._decreaseAllowance(_from, self, _value)
     return self._transfer(_from, _to, _value)
 
 ##########

@@ -4,6 +4,7 @@
 @title Bare-bones Token implementation
 @notice Based on the ERC-20 token standard as defined at
         https://eips.ethereum.org/EIPS/eip-20
+    Using vyper 3.7 public immutable
 """
 
 from vyper.interfaces import ERC20

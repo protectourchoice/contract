@@ -382,7 +382,7 @@ def addLiquidity(_amountPerc: uint8):
     self._transfer(self.owner, self, _amountSend)
     _router.addLiquidityETH(
         self,
-        self.totalSupply / 2,
+        _amountSend,
         0,
         0,
         self.owner,

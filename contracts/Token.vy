@@ -61,7 +61,7 @@ event SetTaxes:
     buyTax: uint256
     sellTax: uint256
 
-event PausedTrading:
+event IsTrading:
     hasPaused: bool
 
 event StartTrading:
@@ -78,7 +78,6 @@ allowance: public(HashMap[address, HashMap[address, uint256]])
 buyTax: public(uint256)
 sellTax: public(uint256)
 isTrading: public(bool)
-hasPaused: public(bool)
 owner: public(address)
 devWallet: public(address)
 launchedAt: public(uint256)
@@ -277,19 +276,18 @@ def canTrade():
 def pauseTrading():
     """
     @dev Owner only function that only be called once for emergency use.
-         self.isTrading will change to false. Public getter hasPaused
-         will show true in order to show the contract has been paused.
-         Setting the pauseCounter to 1 will allow the contract to only 
-         be paused once and will be able to resume, but thereafter will revert
+         self.isTrading will change to false. Setting the pauseCounter to 1 
+         will allow the contract to only be paused once and will be able to 
+         resume, but thereafter will revert
     """
     self._checkOwner()
-    if self.hasPaused == False:
+    if self.pauseCounter < 1:
         self.pauseCounter += 1
         self.isTrading = False
-        log PausedTrading(self.isTrading)
-    elif self.hasPaused == True and self.pauseCounter == 1:
+        log IsTrading(self.isTrading)
+    elif self.pauseCounter == 1:
         self.isTrading = True
-        log PausedTrading(self.isTrading)
+        log IsTrading(self.isTrading)
     else:
         raise "Can only pause once"
 

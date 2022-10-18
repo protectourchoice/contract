@@ -4,7 +4,6 @@
 @title Bare-bones Token implementation
 @notice Based on the ERC-20 token standard as defined at
         https://eips.ethereum.org/EIPS/eip-20
-    Using vyper 3.7 public immutable
 """
 
 from vyper.interfaces import ERC20
@@ -66,7 +65,7 @@ event IsTrading:
 
 event StartTrading:
     startBlock: uint256
-    canTrade: bool
+    canTrade: bool    
 
 # Public generated getters
 NAME: public(immutable(String[64]))
@@ -85,7 +84,6 @@ swapThreshold: public(uint256)
 txLimit: public(uint256)
 walletCap: public(uint256)
 routerAddress: public(address)
-tradingPair: public(address)
 
 # Internal use var
 WETH: immutable(address)
@@ -96,12 +94,11 @@ amountReceive: uint256
 inSwap: bool
 pauseCounter: uint8
 
-
 @external
 def __init__(
-    _name: String[64],
-    _symbol: String[32],
-    _decimals: uint8,
+    _name: String[64], 
+    _symbol: String[32], 
+    _decimals: uint8, 
     _total_supply: uint256):
     init_supply: uint256 = _total_supply * 10 ** convert(_decimals, uint256)
     NAME = _name
@@ -115,8 +112,8 @@ def __init__(
     self.totalSupply = init_supply
     self.owner = msg.sender
     self.txLimit = self.totalSupply * 2 / 100
-    self.walletCap = self.txLimit
-    log Transfer(empty(address), msg.sender, init_supply) # transfer correct init_supply
+    self.walletCap = self.totalSupply * 2 / 100
+    log Transfer(empty(address), msg.sender, init_supply)
 
 ##########
 # @dev Functions below for internal use
@@ -125,9 +122,9 @@ def __init__(
 @internal
 def _checkOwner():
     """
-    @dev onlyOwner check
+    @dev Internal bool check for owner assert
     """
-    assert msg.sender == self.owner
+    assert msg.sender == self.owner, "ah ah ah, you didn't say the magic word"
 
 @internal
 def _distributeSellTax(_from: address, _to: address, _value: uint256):
@@ -135,6 +132,8 @@ def _distributeSellTax(_from: address, _to: address, _value: uint256):
     @dev Internal function for the tax math distribution
     """
     sellFeeAmount: uint256 = _value * self.sellTax / 100
+    if self.allowance[_from][msg.sender] != max_value(uint256):
+        self._decreaseAllowance(_from, msg.sender, _value)
     self.balanceOf[_from] -= _value
     self.balanceOf[self] += sellFeeAmount  # Transfer tax amount to self(contract)
     self.balanceOf[_to] += _value - sellFeeAmount # Transfer token amount minus tax to holder
@@ -150,8 +149,8 @@ def _distributeBuyTax(_from: address, _to: address, _value: uint256):
     self.balanceOf[_from] -= _value
     self.balanceOf[self] += buyFeeAmount  # Transfer tax amount to self(contract)
     self.balanceOf[_to] += _value - buyFeeAmount # Transfer token amount minus tax to holder
-    self.inSwap = False
     log Transfer(_from, _to, _value)
+    
 
 @internal 
 def _transfer(_from: address, _to: address, _value: uint256) -> bool:
@@ -162,7 +161,7 @@ def _transfer(_from: address, _to: address, _value: uint256) -> bool:
     else:
         assert self.isTrading == True
         assert _value > 0 and _value <= self.txLimit
-        if _to == self.tradingPair:
+        if _to == TRADING_PAIR:
             if not self.inSwap and self.balanceOf[self] >= self.swapThreshold:
                 self._swapBack()
             self._distributeSellTax(_from, _to, _value)
@@ -171,13 +170,13 @@ def _transfer(_from: address, _to: address, _value: uint256) -> bool:
             self._distributeBuyTax(_from, _to, _value)
     return True
 
-@internal
+@internal 
 def _basicTransfer(_from: address,_to: address,_value: uint256):
     self.balanceOf[_from] -= _value
     self.balanceOf[_to] += _value
     log Transfer(_from, _to, _value)
 
-@internal
+@internal 
 def _swapBack():
     """
     @dev Internal function for swapping contract tokens for eth
@@ -229,7 +228,7 @@ def approve(_spender : address, _value : uint256) -> bool:
     @param _value The amount of tokens to be spent.
     @return Success boolean
     """
-    self._approve(msg.sender, _spender, _value) # Use internal _approve
+    self._approve(msg.sender, _spender, _value)
     return True
 
 @external
@@ -240,7 +239,7 @@ def transfer(_to : address, _value : uint256) -> bool:
          tokens than an account has will revert
     @param _to The address to transfer to
     @param _value The amount to be transferred
-    @return Success boolean
+    @return Internal _transfer
     """
     return self._transfer(msg.sender, _to, _value)
 
@@ -253,11 +252,10 @@ def transferFrom(_from : address, _to : address, _value : uint256) -> bool:
     @param _from The address which you want to send tokens from
     @param _to The address which you want to transfer to
     @param _value The amount of tokens to be transferred
+    @return Internal _transfer
     """
-    if self.allowance[_from][msg.sender] != max_value(uint256):
-        self._decreaseAllowance(_from, msg.sender, _value)
     return self._transfer(_from, _to, _value)
-
+    
 ##########
 # @dev Functions below are owner only
 ##########
@@ -297,12 +295,12 @@ def setSwapThreshold(_value: uint256):
     @dev Owner only function to set swap threshold for tax sells
          Tax amount must be less than 1% of total supply
     @param _value is an int less than ten. This is a percentage
-            based on 1000 points
+            based on 1000 points  
     """
     self._checkOwner()
     assert _value < 10
     self.swapThreshold = self.totalSupply * _value / 1000
-    log SetSwapThreshold(self.swapThreshold)
+    log SetSwapThreshold(self.swapThreshold)       
 
 @external
 def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
@@ -318,6 +316,7 @@ def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
     self.sellTax = _sellTaxValue
     log SetTaxes(self.buyTax, self.sellTax)
 
+    
 @external
 def setDevWallet(_newWallet: address) -> bool:
     """
@@ -334,7 +333,7 @@ def setDevWallet(_newWallet: address) -> bool:
 def setRouter(_address: address) -> bool:
     """
     @dev Set router in case of uniswap upgrade
-    @param _address Router address
+    @param _address Router address 
     """
     self._checkOwner()
     assert _address != empty(address)
@@ -386,4 +385,4 @@ def addLiquidity(_amountPerc: uint8):
         self.owner,
         block.timestamp + 5,
         value=msg.value
-        )
+    )

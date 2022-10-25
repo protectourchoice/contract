@@ -1,9 +1,18 @@
 # @version 0.3.7
 
 """
-@title Bare-bones Token implementation
-@notice Based on the ERC-20 token standard as defined at
-        https://eips.ethereum.org/EIPS/eip-20
+@title Protect Our Choice
+@notice A women-led, crypto-backed startup connecting women’s rights and LGBTQIA advocacy nonprofits to crypto and Web3!
+
+Major partnerships. dApp in final stages. Education and outreach platform in development. Custom, fully-audited contract. 
+
+Giving a voice to communities who rarely get a seat at the table.
+
+Telegram: https://t.me/ProtectOurChoice
+
+Website: https://www.protectourchoice.org/
+
+Twitter: https://twitter.com/protect_choice
 """
 
 from vyper.interfaces import ERC20
@@ -49,6 +58,9 @@ event Transfer:
 event SetRouter:
     newRouter: indexed(address)
 
+event TransferOwnership:
+    newOwner: indexed(address)
+
 event SetSwapThreshold:
     value: uint256
 
@@ -57,8 +69,8 @@ event RemoveLimits:
     maxWallet: uint256
 
 event SetTaxes:
-    buyTax: uint256
-    sellTax: uint256
+    buyTax: uint8
+    sellTax: uint8
 
 event IsTrading:
     hasPaused: bool
@@ -68,14 +80,14 @@ event StartTrading:
     canTrade: bool    
 
 # Public generated getters
-NAME: public(immutable(String[64]))
-SYMBOL: public(immutable(String[32]))
-DECIMALS: public(immutable(uint8))
+name: public(String[64])
+symbol: public(String[32])
+decimals: public(uint8)
 totalSupply: public(uint256)
 balanceOf: public(HashMap[address, uint256])
 allowance: public(HashMap[address, HashMap[address, uint256]])
-buyTax: public(uint256)
-sellTax: public(uint256)
+buyTax: public(uint8)
+sellTax: public(uint8)
 isTrading: public(bool)
 owner: public(address)
 devWallet: public(address)
@@ -84,12 +96,12 @@ swapThreshold: public(uint256)
 txLimit: public(uint256)
 walletCap: public(uint256)
 routerAddress: public(address)
+tradingPair: public(address)
 
 # Internal use var
-WETH: immutable(address)
+WETH: constant(address) = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
+MAX_TAX: constant(uint8) = 25
 FACTORY_ADDRESS: immutable(IUniswapV2Factory)
-TRADING_PAIR: immutable(address)
-MAX_TAX: immutable(uint256)
 amountReceive: uint256
 inSwap: bool
 pauseCounter: uint8
@@ -101,18 +113,16 @@ def __init__(
     _decimals: uint8, 
     _total_supply: uint256):
     init_supply: uint256 = _total_supply * 10 ** convert(_decimals, uint256)
-    NAME = _name
-    SYMBOL = _symbol
-    DECIMALS = _decimals
-    WETH = 0xC02aaA39b223FE8D0A0e5C4F27eAD9083C756Cc2
-    FACTORY_ADDRESS = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f)
-    TRADING_PAIR = FACTORY_ADDRESS.createPair(self, WETH)
-    MAX_TAX = 25
+    self.name = _name
+    self.symbol = _symbol
+    self.decimals = _decimals
     self.balanceOf[msg.sender] = init_supply
     self.totalSupply = init_supply
     self.owner = msg.sender
     self.txLimit = self.totalSupply * 2 / 100
     self.walletCap = self.totalSupply * 2 / 100
+    FACTORY_ADDRESS = IUniswapV2Factory(0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f)
+    self.tradingPair = FACTORY_ADDRESS.createPair(self, WETH)
     log Transfer(empty(address), msg.sender, init_supply)
 
 ##########
@@ -120,24 +130,26 @@ def __init__(
 ##########
 
 @internal
-def _checkOwner():
+def _checkOwner() -> bool:
     """
     @dev Internal bool check for owner assert
     """
     assert msg.sender == self.owner, "ah ah ah, you didn't say the magic word"
+    return True
 
 @internal
 def _distributeSellTax(_from: address, _to: address, _value: uint256):
     """
     @dev Internal function for the tax math distribution
     """
-    sellFeeAmount: uint256 = _value * self.sellTax / 100
+    sellFeeAmount: uint256 = _value * convert(self.sellTax, uint256) / 100
     if self.allowance[_from][msg.sender] != max_value(uint256):
         self._decreaseAllowance(_from, msg.sender, _value)
     self.balanceOf[_from] -= _value
     self.balanceOf[self] += sellFeeAmount  # Transfer tax amount to self(contract)
     self.balanceOf[_to] += _value - sellFeeAmount # Transfer token amount minus tax to holder
     self.inSwap = False
+    log Transfer(_from, self, sellFeeAmount)
     log Transfer(_from, _to, _value)
 
 @internal
@@ -145,12 +157,12 @@ def _distributeBuyTax(_from: address, _to: address, _value: uint256):
     """
     @dev Internal function for the tax math distribution
     """
-    buyFeeAmount: uint256 = _value * self.buyTax / 100
+    buyFeeAmount: uint256 = _value * convert(self.buyTax, uint256) / 100
     self.balanceOf[_from] -= _value
     self.balanceOf[self] += buyFeeAmount  # Transfer tax amount to self(contract)
     self.balanceOf[_to] += _value - buyFeeAmount # Transfer token amount minus tax to holder
+    log Transfer(_from, self, buyFeeAmount)
     log Transfer(_from, _to, _value)
-    
 
 @internal 
 def _transfer(_from: address, _to: address, _value: uint256) -> bool:
@@ -158,10 +170,12 @@ def _transfer(_from: address, _to: address, _value: uint256) -> bool:
     assert _to != empty(address)
     if _from == self.owner or _to == self.owner:
         self._basicTransfer(_from, _to, _value)
+    elif _from == self and _to == self.tradingPair:
+        self._basicTransfer(_from, _to, _value)
     else:
         assert self.isTrading == True
         assert _value > 0 and _value <= self.txLimit
-        if _to == TRADING_PAIR:
+        if _to == self.tradingPair:
             if not self.inSwap and self.balanceOf[self] >= self.swapThreshold:
                 self._swapBack()
             self._distributeSellTax(_from, _to, _value)
@@ -177,7 +191,7 @@ def _basicTransfer(_from: address,_to: address,_value: uint256):
     log Transfer(_from, _to, _value)
 
 @internal 
-def _swapBack():
+def _swapBack() -> bool:
     """
     @dev Internal function for swapping contract tokens for eth
          using uniswap router
@@ -192,11 +206,12 @@ def _swapBack():
         self,
         block.timestamp + 4
     )
+    return True
 
 @internal
 def _approve(_owner: address, _spender: address, _value: uint256):
     self.allowance[_owner][_spender] = _value
-    log Approval(_owner, _spender, _value)
+    log Approval(msg.sender, _spender, _value)
 
 @internal 
 def _decreaseAllowance(_owner: address, _spender: address, _subtractedValue: uint256):
@@ -293,17 +308,17 @@ def pauseTrading():
 def setSwapThreshold(_value: uint256):
     """
     @dev Owner only function to set swap threshold for tax sells
-         Tax amount must be less than 1% of total supply
+         Tax amount must be less than 2% of total supply
     @param _value is an int less than ten. This is a percentage
             based on 1000 points  
     """
     self._checkOwner()
-    assert _value < 10
-    self.swapThreshold = self.totalSupply * _value / 1000
-    log SetSwapThreshold(self.swapThreshold)       
+    assert _value < 20
+    self.swapThreshold = self.totalSupply * _value / 1000 
+    log SetSwapThreshold(self.swapThreshold)      
 
 @external
-def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
+def setTaxes(_buyTaxValue: uint8, _sellTaxValue: uint8):
     """
     @dev Owner only function to set tax amounts
         cannot exceed 25
@@ -311,11 +326,10 @@ def setTaxes(_buyTaxValue: uint256, _sellTaxValue: uint256):
     @param _sellTaxValue set sell tax
     """
     self._checkOwner()
-    assert _sellTaxValue + _buyTaxValue <= MAX_TAX
+    assert _sellTaxValue + _buyTaxValue <= MAX_TAX, "More than 25% round trip is gross"
     self.buyTax = _buyTaxValue
     self.sellTax = _sellTaxValue
-    log SetTaxes(self.buyTax, self.sellTax)
-
+    log SetTaxes(_buyTaxValue, _sellTaxValue)
     
 @external
 def setDevWallet(_newWallet: address) -> bool:
@@ -324,9 +338,19 @@ def setDevWallet(_newWallet: address) -> bool:
     @param _newWallet new wallet to send tax to
     """
     self._checkOwner()
-    assert _newWallet != empty(address)
-    assert _newWallet != self.devWallet
     self.devWallet = _newWallet
+    return True
+
+@external
+def transferOwnership(_newOwner: address) -> bool:
+    """
+    @dev Transfer ownership
+    """
+    self._checkOwner()
+    assert _newOwner != empty(address)
+    assert _newOwner != self.owner
+    self.owner = _newOwner
+    log TransferOwnership(_newOwner)
     return True
 
 @external
@@ -336,7 +360,6 @@ def setRouter(_address: address) -> bool:
     @param _address Router address 
     """
     self._checkOwner()
-    assert _address != empty(address)
     assert _address != self.routerAddress
     self.routerAddress = _address
     log SetRouter(_address)
@@ -360,29 +383,5 @@ def removeLimits() -> bool:
     """
     self._checkOwner()
     self.txLimit = max_value(uint256)
-    self.walletCap = max_value(uint256)
     log RemoveLimits( self.txLimit, self.walletCap)
     return True
-
-@external
-@payable
-def addLiquidity(_amountPerc: uint8):
-    """
-    @dev Owner only function to add liquidity
-    @param _amountPerc integer value for percentage to add liq
-    """
-    self._checkOwner()
-    assert self.routerAddress != empty(address)
-    _amountSend: uint256 = self.totalSupply * convert(_amountPerc, uint256) / 100
-    self._approve(self, self.routerAddress, _amountSend)
-    _router: IUniswapV2Router02 = IUniswapV2Router02(self.routerAddress)
-    self._transfer(self.owner, self, _amountSend)
-    _router.addLiquidityETH(
-        self,
-        _amountSend,
-        0,
-        0,
-        self.owner,
-        block.timestamp + 5,
-        value=msg.value
-    )
